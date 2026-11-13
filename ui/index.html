@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScreenHub Client Kiosk</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Vista del Kiosco: iframe donde se renderiza la web remota con todos los permisos multimedia necesarios para YouTube, Vimeo y streaming -->
+  <iframe id="kiosk-frame" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen; camera; microphone; display-capture" referrerpolicy="strict-origin-when-cross-origin" src="about:blank"></iframe>
+
+  <!-- Indicador Flotante de Fuente de Contenido (Red vs Caché) -->
+  <div id="source-indicator-badge" class="source-badge hidden">
+    <span id="source-badge-icon">🌐</span>
+    <span id="source-badge-text">RED (INTERNET)</span>
+  </div>
+
+  <!-- Vista de Reintento / Reconexión de red -->
+  <div id="offline-screen" class="hidden">
+    <div class="card" id="offline-card">
+      <div class="spinner"></div>
+      <h1 id="status-title">Conectando...</h1>
+      <p id="status-desc">Cargando el contenido de Digital Signage.</p>
+      <div class="target-url" id="target-url-display">---</div>
+      <div class="retry-timer" id="retry-timer">Reintentando en <span id="countdown">5</span>s</div>
+      <div class="shortcut-tip">Presiona <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd> para Configuración</div>
+    </div>
+  </div>
+
+  <!-- Prompt de PIN de Seguridad (Si está activado) -->
+  <div id="pin-modal" class="modal-overlay hidden">
+    <div class="modal-card pin-card">
+      <h2>🔒 PIN de Seguridad</h2>
+      <p>Introduce el código PIN para acceder a la configuración:</p>
+      <input type="password" id="pin-input" placeholder="****" maxlength="8" />
+      <div id="pin-error" class="error-msg hidden">Código PIN incorrecto</div>
+      <div class="modal-actions">
+        <button id="btn-submit-pin" class="btn-primary">Ingresar</button>
+        <button id="btn-cancel-pin" class="btn-secondary">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Configuración (Almacenado en SQLite) -->
+  <div id="config-modal" class="modal-overlay hidden">
+    <div class="modal-card config-card">
+      <div class="config-header">
+        <div class="header-title">
+          <h2>⚙️ Configuración ScreenHub Client</h2>
+          <span class="db-badge">SQLite Active</span>
+        </div>
+        <button id="btn-x-close" class="btn-icon" title="Cerrar">&times;</button>
+      </div>
+
+      <div class="config-body">
+        <!-- Notificación de prueba de URL / Guardado -->
+        <div id="config-alert" class="alert hidden"></div>
+
+        <!-- Campo 1: URL de la pantalla -->
+        <div class="form-group">
+          <label for="cfg-url">🌐 URL de la Pantalla Remota:</label>
+          <div class="input-with-button">
+            <input type="url" id="cfg-url" placeholder="http://localhost:3000/screens/sala-1" autocomplete="off" />
+            <button type="button" id="btn-test-url" class="btn-secondary">⚡ Probar URL</button>
+          </div>
+          <small>La URL completa de la pantalla de Digital Signage que se desplegará en el cliente.</small>
+        </div>
+
+        <!-- Campo 2: Modo Kiosco (Habilitar / Deshabilitar) -->
+        <div class="form-group">
+          <label>📺 Modo Kiosco:</label>
+          <div class="toggle-container">
+            <label class="switch">
+              <input type="checkbox" id="cfg-kiosk" checked />
+              <span class="slider round"></span>
+            </label>
+            <span id="kiosk-status-text" class="toggle-status-text">Habilitado (Pantalla completa sin bordes)</span>
+          </div>
+          <small>Desactiva esta opción si deseas mostrar barra de título, bordes y permitir redimensionar o minimizar la ventana.</small>
+        </div>
+
+        <!-- Campo 3: Indicador de Fuente de Contenido (Red vs Caché) -->
+        <div class="form-group">
+          <label>📡 Indicador de Fuente de Contenido:</label>
+          <div class="toggle-container">
+            <label class="switch">
+              <input type="checkbox" id="cfg-show-source" />
+              <span class="slider round"></span>
+            </label>
+            <span id="source-status-text" class="toggle-status-text">Ocultar indicador en pantalla</span>
+          </div>
+          <small>Muestra una etiqueta flotante en la reproducción indicando si el contenido proviene de Internet 🌐 o de Caché Local ⚡.</small>
+        </div>
+
+        <!-- Campo 4: Intervalo de verificación & PIN -->
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="cfg-interval">⏱️ Intervalo Reintento (seg):</label>
+            <input type="number" id="cfg-interval" min="1" max="120" value="5" />
+            <small>Frecuencia de comprobación de conexión.</small>
+          </div>
+
+          <div class="form-group half">
+            <label for="cfg-pin">🔒 PIN de Seguridad (Opcional):</label>
+            <input type="password" id="cfg-pin" placeholder="Sin PIN (Directo)" maxlength="16" />
+            <small>Código para restringir el atajo Ctrl+Shift+M.</small>
+          </div>
+        </div>
+
+        <!-- Campo 5: Espacio en Caché en Barra de Progreso -->
+        <div class="form-group cache-usage-section">
+          <div class="cache-usage-header">
+            <label>💾 Espacio Ocupado por la Caché Local:</label>
+            <span id="cache-usage-text" class="cache-usage-text">Calculando...</span>
+          </div>
+          <div class="progress-bar-track">
+            <div id="cache-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <small>Límite reservado para almacenamiento offline de videos, imágenes y audio: 2.0 GB.</small>
+        </div>
+      </div>
+
+      <div class="config-footer">
+        <div class="footer-left">
+          <button type="button" id="btn-reset-config" class="btn-subtle-danger">🔄 Restablecer</button>
+          <button type="button" id="btn-clear-cache" class="btn-subtle-warning">🗑️ Limpiar Caché</button>
+        </div>
+        <div class="footer-right">
+          <button type="button" id="btn-close-config" class="btn-secondary">Cancelar</button>
+          <button type="button" id="btn-save-config" class="btn-primary">💾 Guardar en SQLite</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

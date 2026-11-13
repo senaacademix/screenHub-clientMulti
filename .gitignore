@@ -1,0 +1,34 @@
+# Node / npm
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Rust / Cargo build targets
+target/
+src-tauri/target/
+
+# Archivos temporales y de sistema OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+*.bak
+
+# IDEs y editores de código
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Compilados de producción e instaladores
+screenhub-client
+*.exe
+*.msi
+*.deb
+*.rpm
+*.AppImage
+*.app
+*.dmg
