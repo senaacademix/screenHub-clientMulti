@@ -10,6 +10,28 @@ if [ -z "$GDK_BACKEND" ] && [ -n "$DISPLAY" ]; then
     export GDK_BACKEND="x11"
 fi
 
+# Verificar presencia de códecs multimedia en Linux (WebKitGTK requiere GStreamer para videos HTML5 y YouTube)
+if command -v gst-inspect-1.0 >/dev/null 2>&1; then
+    if ! gst-inspect-1.0 isomp4 >/dev/null 2>&1 || ! gst-inspect-1.0 avdec_h264 >/dev/null 2>&1; then
+        echo "⚠️  [ScreenHub] ADVERTENCIA: Faltan decodificadores multimedia de GStreamer en el sistema."
+        echo "    Para habilitar la reproducción de YouTube y video HTML5 en el cliente nativo:"
+        echo "    - Arch Linux: sudo pacman -S --needed gst-plugins-good gst-libav gst-plugins-bad"
+        echo "    - Ubuntu/Debian: sudo apt-get install gstreamer1.0-plugins-good gstreamer1.0-libav gstreamer1.0-plugins-bad"
+        echo ""
+    fi
+fi
+
+# Opción para forzar ejecución vía Chromium (--browser o -b)
+if [ "$1" = "--browser" ] || [ "$1" = "-b" ]; then
+    echo "Iniciando modo Kiosco mediante navegador Chromium..."
+    DB_URL=""
+    if command -v sqlite3 >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/screenhub.db" ]; then
+        DB_URL=$(sqlite3 "$SCRIPT_DIR/screenhub.db" "SELECT value FROM settings WHERE key='url';" 2>/dev/null)
+    fi
+    TARGET_URL="${DB_URL:-file://$SCRIPT_DIR/ui/index.html}"
+    exec chromium --kiosk --noerrdialogs --disable-infobars --autoplay-policy=no-user-gesture-required "$TARGET_URL"
+fi
+
 BIN_ROOT="$SCRIPT_DIR/screenhub-client"
 BIN_TARGET="$SCRIPT_DIR/src-tauri/target/release/screenhub-client"
 
